@@ -26,37 +26,38 @@ jobs:
           COMMIT_TIME=$(git log -1 --pretty=format:"%ci")
           README_CONTENT=$(cat README.md)
 
+          HEADER="📢 README.md 已更新
+
+👤 作者：${COMMIT_AUTHOR}
+💬 提交：${COMMIT_MSG}
+🕐 时间：${COMMIT_TIME}
+🔗 https://github.com/ZhouX0815/Trade
+
+━━━━━━━━━━━━━━━━━━━━
+📄 最新内容：
+
+"
+          FULL_MSG="${HEADER}${README_CONTENT}"
+          FULL_LEN=${#FULL_MSG}
+          TOTAL_LEN=${#README_CONTENT}
+
           send_message() {
             local TEXT="$1"
             python3 - <<PYEOF
-import urllib.request, urllib.parse, json, os
-
-token = os.environ["BOT_TOKEN"]
-chat_id = os.environ["CHAT_ID"]
-text = """$TEXT"""
-
-data = json.dumps({
-    "chat_id": chat_id,
-    "text": text,
-    "disable_web_page_preview": True
-}).encode("utf-8")
-
+import urllib.request, urllib.parse, json
+token = "${BOT_TOKEN}"
+chat_id = "${CHAT_ID}"
+text = """${TEXT}"""
+data = json.dumps({"chat_id": chat_id, "text": text, "disable_web_page_preview": True}).encode()
 req = urllib.request.Request(
     f"https://api.telegram.org/bot{token}/sendMessage",
     data=data,
     headers={"Content-Type": "application/json"}
 )
-resp = urllib.request.urlopen(req)
-print(resp.read().decode())
+with urllib.request.urlopen(req) as r:
+    print(r.read().decode())
 PYEOF
           }
-
-          HEADER=$(printf "📢 README.md 已更新\n\n👤 作者：%s\n💬 提交：%s\n🕐 时间：%s\n🔗 https://github.com/ZhouX0815/Trade\n\n━━━━━━━━━━━━━━━━━━━━\n📄 最新内容：\n\n" \
-            "$COMMIT_AUTHOR" "$COMMIT_MSG" "$COMMIT_TIME")
-
-          FULL_MSG="${HEADER}${README_CONTENT}"
-          FULL_LEN=${#FULL_MSG}
-          TOTAL_LEN=${#README_CONTENT}
 
           if [ "$FULL_LEN" -le 4000 ]; then
             send_message "$FULL_MSG"
@@ -67,7 +68,9 @@ PYEOF
             PART=1
             while [ "$START" -lt "$TOTAL_LEN" ]; do
               CHUNK="${README_CONTENT:$START:$CHUNK_SIZE}"
-              send_message "$(printf '📄 内容（第 %d 段）：\n\n%s' $PART "$CHUNK")"
+              send_message "📄 内容（第 ${PART} 段）：
+
+${CHUNK}"
               START=$((START + CHUNK_SIZE))
               PART=$((PART + 1))
               sleep 1
