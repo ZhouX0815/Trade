@@ -16,48 +16,66 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Prepare data
+      - name: Prepare diff
         run: |
-          git log -1 --pretty=format:"%s" > /tmp/commit_msg.txt
-          git log -1 --pretty=format:"%an" > /tmp/commit_author.txt
-          git log -1 --pretty=format:"%ci" > /tmp/commit_time.txt
-          cp README.md /tmp/readme_content.txt
+          git diff HEAD~1 HEAD -- README.md > /tmp/readme_diff.txt
+          cat /tmp/readme_diff.txt
 
       - name: Write Python script
         run: |
           cat > /tmp/send.py << 'PYEOF'
           import urllib.request, json, os, time
+
           token   = os.environ["BOT_TOKEN"]
           chat_id = os.environ["CHAT_ID"]
-          commit_msg    = open("/tmp/commit_msg.txt").read().strip()
-          commit_author = open("/tmp/commit_author.txt").read().strip()
-          commit_time   = open("/tmp/commit_time.txt").read().strip()
-          readme        = open("/tmp/readme_content.txt").read()
+
+          raw_diff = open("/tmp/readme_diff.txt").read()
+
+          # 只提取新增行（以 + 开头）和删除行（以 - 开头），跳过 diff 头部元信息
+          added   = []
+          removed = []
+          for line in raw_diff.splitlines():
+              if line.startswith("+") and not line.startswith("+++"):
+                  added.append(line[1:].strip())
+              elif line.startswith("-") and not line.startswith("---"):
+                  removed.append(line[1:].strip())
+
+          # 过滤空行
+          added   = [l for l in added   if l]
+          removed = [l for l in removed if l]
+
+          if not added and not removed:
+              print("No changes detected, skip.")
+              exit(0)
+
+          parts = []
+          if removed:
+              parts.append("删除内容：\n" + "\n".join(f"  {l}" for l in removed))
+          if added:
+              parts.append("新增内容：\n" + "\n".join(f"  {l}" for l in added))
+
+          message = "\n\n".join(parts)
+
           def send(text):
-              data = json.dumps({"chat_id": chat_id, "text": text, "disable_web_page_preview": True}).encode("utf-8")
-              req  = urllib.request.Request(
+              data = json.dumps({
+                  "chat_id": chat_id,
+                  "text": text,
+                  "disable_web_page_preview": True
+              }).encode("utf-8")
+              req = urllib.request.Request(
                   f"https://api.telegram.org/bot{token}/sendMessage",
-                  data=data, headers={"Content-Type": "application/json"}
+                  data=data,
+                  headers={"Content-Type": "application/json"}
               )
               with urllib.request.urlopen(req) as r:
                   print(r.read().decode())
-          header = (
-              "README.md 已更新\n\n"
-              f"作者：{commit_author}\n"
-              f"提交：{commit_msg}\n"
-              f"时间：{commit_time}\n"
-              "链接：https://github.com/ZhouX0815/Trade\n\n"
-              "--------------------\n"
-              "最新内容：\n\n"
-          )
-          full = header + readme
-          if len(full) <= 4000:
-              send(full)
+
+          if len(message) <= 4000:
+              send(message)
           else:
-              send(header)
-              parts = [readme[i:i+3800] for i in range(0, len(readme), 3800)]
-              for idx, part in enumerate(parts, 1):
-                  send(f"内容（第 {idx} 段）：\n\n{part}")
+              chunks = [message[i:i+3800] for i in range(0, len(message), 3800)]
+              for idx, chunk in enumerate(chunks, 1):
+                  send(f"（第 {idx} 段）\n\n{chunk}")
                   time.sleep(1)
           PYEOF
 
@@ -66,3 +84,18 @@ jobs:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: "-1003751294383"
         run: python3 /tmp/send.py
+```
+
+---
+
+### 修改说明
+
+- **只推送变更内容**：通过 `git diff HEAD~1 HEAD` 提取改动，解析出新增行（`+`）和删除行（`-`）
+- **移除了**作者、提交信息、链接等元信息
+- **消息格式**如下：
+```
+删除内容：
+  旧的那行文字
+
+新增内容：
+  新的那行文字
