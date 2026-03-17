@@ -1,0 +1,80 @@
+name: Notify Telegram when README updates
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'README.md'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Read README and send to Telegram
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: "-1003751294383"
+        run: |
+          # 获取提交信息
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an")
+          COMMIT_TIME=$(git log -1 --pretty=format:"%ci")
+
+          # 读取 README 全部内容
+          README_CONTENT=$(cat README.md)
+          TOTAL_LEN=${#README_CONTENT}
+
+          # Telegram 单条消息限制 4096 字符，头部信息占约 200 字符
+          HEADER="📢 README.md 已更新
+
+👤 作者：${COMMIT_AUTHOR}
+💬 提交：${COMMIT_MSG}
+🕐 时间：${COMMIT_TIME}
+🔗 https://github.com/ZhouX0815/Trade
+
+━━━━━━━━━━━━━━━━━━━━
+📄 最新内容：
+
+"
+
+          FULL_MSG="${HEADER}${README_CONTENT}"
+          FULL_LEN=${#FULL_MSG}
+
+          send_message() {
+            local text="$1"
+            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"chat_id\": \"${CHAT_ID}\",
+                \"text\": $(echo "$text" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+                \"disable_web_page_preview\": true
+              }"
+          }
+
+          # 如果内容超过 4000 字符则分段发送
+          if [ "$FULL_LEN" -le 4000 ]; then
+            send_message "$FULL_MSG"
+          else
+            # 先发头部信息
+            send_message "$HEADER"
+            
+            # 分段发正文，每段 3800 字符
+            CHUNK_SIZE=3800
+            START=0
+            PART=1
+            while [ "$START" -lt "$TOTAL_LEN" ]; do
+              CHUNK="${README_CONTENT:$START:$CHUNK_SIZE}"
+              send_message "📄 内容（第 ${PART} 段）：
+
+${CHUNK}"
+              START=$((START + CHUNK_SIZE))
+              PART=$((PART + 1))
+              sleep 1  # 避免触发 Telegram 限流
+            done
+          fi
