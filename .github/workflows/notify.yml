@@ -21,58 +21,17 @@ jobs:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: "-1003751294383"
         run: |
-          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-          COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an")
-          COMMIT_TIME=$(git log -1 --pretty=format:"%ci")
-          README_CONTENT=$(cat README.md)
+          git log -1 --pretty=format:"%s" > /tmp/commit_msg.txt
+          git log -1 --pretty=format:"%an" > /tmp/commit_author.txt
+          git log -1 --pretty=format:"%ci" > /tmp/commit_time.txt
+          cp README.md /tmp/readme_content.txt
 
-          HEADER="📢 README.md 已更新
+          python3 << 'EOF'
+import urllib.request, json, os, time
 
-👤 作者：${COMMIT_AUTHOR}
-💬 提交：${COMMIT_MSG}
-🕐 时间：${COMMIT_TIME}
-🔗 https://github.com/ZhouX0815/Trade
+token   = os.environ["BOT_TOKEN"]
+chat_id = os.environ["CHAT_ID"]
 
-━━━━━━━━━━━━━━━━━━━━
-📄 最新内容：
-
-"
-          FULL_MSG="${HEADER}${README_CONTENT}"
-          FULL_LEN=${#FULL_MSG}
-          TOTAL_LEN=${#README_CONTENT}
-
-          send_message() {
-            local TEXT="$1"
-            python3 - <<PYEOF
-import urllib.request, urllib.parse, json
-token = "${BOT_TOKEN}"
-chat_id = "${CHAT_ID}"
-text = """${TEXT}"""
-data = json.dumps({"chat_id": chat_id, "text": text, "disable_web_page_preview": True}).encode()
-req = urllib.request.Request(
-    f"https://api.telegram.org/bot{token}/sendMessage",
-    data=data,
-    headers={"Content-Type": "application/json"}
-)
-with urllib.request.urlopen(req) as r:
-    print(r.read().decode())
-PYEOF
-          }
-
-          if [ "$FULL_LEN" -le 4000 ]; then
-            send_message "$FULL_MSG"
-          else
-            send_message "$HEADER"
-            CHUNK_SIZE=3800
-            START=0
-            PART=1
-            while [ "$START" -lt "$TOTAL_LEN" ]; do
-              CHUNK="${README_CONTENT:$START:$CHUNK_SIZE}"
-              send_message "📄 内容（第 ${PART} 段）：
-
-${CHUNK}"
-              START=$((START + CHUNK_SIZE))
-              PART=$((PART + 1))
-              sleep 1
-            done
-          fi
+commit_msg    = open("/tmp/commit_msg.txt").read().strip()
+commit_author = open("/tmp/commit_author.txt").read().strip()
+commit_time   = open("/tmp/commit_time.txt").
