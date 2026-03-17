@@ -50,9 +50,9 @@ jobs:
 
           parts = []
           if removed:
-              parts.append("删除内容：\n" + "\n".join(f"  {l}" for l in removed))
+              parts.append("删除记录：\n" + "\n".join(f"  {l}" for l in removed))
           if added:
-              parts.append("新增内容：\n" + "\n".join(f"  {l}" for l in added))
+              parts.append("新记录：\n" + "\n".join(f"  {l}" for l in added))
 
           message = "\n\n".join(parts)
 
