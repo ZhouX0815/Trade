@@ -84,7 +84,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: "-1003751294383"
         run: python3 /tmp/send.py
-```
+
 
 ---
 
@@ -93,7 +93,7 @@ jobs:
 - **只推送变更内容**：通过 `git diff HEAD~1 HEAD` 提取改动，解析出新增行（`+`）和删除行（`-`）
 - **移除了**作者、提交信息、链接等元信息
 - **消息格式**如下：
-```
+
 删除内容：
   旧的那行文字
 
